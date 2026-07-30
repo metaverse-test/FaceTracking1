@@ -570,7 +570,7 @@ function predict(){
 
         ){
 
-            applyHeadRotation(
+            smoothRotation(
 
                 results.facialTransformationMatrixes[0].data
 
