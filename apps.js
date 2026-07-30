@@ -556,8 +556,7 @@ function predict(){
 
         ){
 
-            applyBlendshapes(
-
+            applyBlendshapeOptimized(   
                 results.faceBlendshapes
 
             );
