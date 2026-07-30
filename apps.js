@@ -174,7 +174,7 @@ const loader = new THREE.GLTFLoader();
 loader.setCrossOrigin("anonymous");
 
 // Remplace par ton modèle
-const MODEL_PATH = "assets/metaHumanHead_52shapekeys_01.glb";
+const MODEL_PATH = "assets/MetaHuman.glb";
 
 loader.load(
 
