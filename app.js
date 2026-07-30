@@ -141,7 +141,7 @@ let faceMeshes=[];
 
 loader.load(
 
-"assets/metahuman.glb",
+"assets/MetaHuman.glb",
 
 (gltf)=>{
 
