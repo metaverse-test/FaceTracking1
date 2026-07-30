@@ -352,3 +352,239 @@ function render(){
 }
 
 render();
+
+
+
+
+
+
+
+// ==========================================================
+// PARTIE 2 : MediaPipe Face Landmarker
+// ==========================================================
+
+// ---------- Interface ----------
+const video = document.getElementById("webcam");
+const startBtn = document.getElementById("startBtn");
+const blendCounter = document.getElementById("blendCount");
+
+// ---------- Variables ----------
+let faceLandmarker = null;
+let webcamRunning = false;
+let lastVideoTime = -1;
+
+// Lissage des blendshapes
+const smoothValues = {};
+
+function smooth(name, target, factor = 0.45){
+
+    if(smoothValues[name] === undefined){
+
+        smoothValues[name] = target;
+
+    }
+
+    smoothValues[name] +=
+        (target - smoothValues[name]) * factor;
+
+    return smoothValues[name];
+
+}
+
+// ==========================================================
+// Initialisation MediaPipe
+// ==========================================================
+
+async function initMediaPipe(){
+
+    loadingInfo.textContent =
+        "Initialisation MediaPipe...";
+
+    const vision =
+    await window.FilesetResolver.forVisionTasks(
+
+        "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm"
+
+    );
+
+    faceLandmarker =
+    await window.FaceLandmarker.createFromOptions(
+
+        vision,
+
+        {
+
+            baseOptions:{
+
+                modelAssetPath:
+
+                "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task",
+
+                delegate:"GPU"
+
+            },
+
+            runningMode:"VIDEO",
+
+            numFaces:1,
+
+            outputFaceBlendshapes:true,
+
+            outputFacialTransformationMatrixes:true
+
+        }
+
+    );
+
+    loadingInfo.textContent =
+        "MediaPipe prêt";
+
+    startBtn.disabled = false;
+
+}
+
+initMediaPipe();
+
+// ==========================================================
+// Webcam
+// ==========================================================
+
+startBtn.addEventListener(
+
+"click",
+
+async()=>{
+
+    if(webcamRunning) return;
+
+    try{
+
+        const stream =
+        await navigator.mediaDevices.getUserMedia({
+
+            video:{
+                facingMode:"user",
+                width:{ideal:640},
+                height:{ideal:480}
+            },
+
+            audio:false
+
+        });
+
+        video.srcObject = stream;
+
+        await video.play();
+
+        webcamRunning = true;
+
+        startBtn.style.display = "none";
+
+        predict();
+
+    }
+
+    catch(error){
+
+        alert(error.message);
+
+    }
+
+});
+
+// ==========================================================
+// Blendshapes
+// ==========================================applyBlendshapeso
+// ==========================================================
+// Rotation tête
+// ==========================================================
+
+function applyHeadRotation(matrixData){
+
+    if(!avatar) return;
+
+    const matrix =
+    new THREE.Matrix4();
+
+    matrix.fromArray(matrixData);
+
+    const quaternion =
+    new THREE.Quaternion();
+
+    quaternion.setFromRotationMatrix(matrix);
+
+    avatar.quaternion.slerp(
+
+        quaternion,
+
+        0.25
+
+    );
+
+}
+
+// ==========================================================
+// Boucle MediaPipe
+// ==========================================================
+
+function predict(){
+
+    if(!webcamRunning){
+
+        return;
+
+    }
+
+    if(video.currentTime !== lastVideoTime){
+
+        lastVideoTime = video.currentTime;
+
+        const results =
+
+        faceLandmarker.detectForVideo(
+
+            video,
+
+            performance.now()
+
+        );
+
+        if(
+
+            results.faceBlendshapes &&
+            results.faceBlendshapes.length
+
+        ){
+
+            applyBlendshapes(
+
+                results.faceBlendshapes
+
+            );
+
+        }
+
+        if(
+
+            results.facialTransformationMatrixes &&
+            results.facialTransformationMatrixes.length
+
+        ){
+
+            applyHeadRotation(
+
+                results.facialTransformationMatrixes[0].data
+
+            );
+
+        }
+
+    }
+
+    requestAnimationFrame(predict);
+
+}
+
+
+
+
