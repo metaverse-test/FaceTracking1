@@ -556,7 +556,7 @@ function predict(){
 
         ){
 
-            applyBlendshapeOptimized(   
+            applyBlendshapesOptimized(   
                 results.faceBlendshapes
 
             );
@@ -587,3 +587,369 @@ function predict(){
 
 
 
+// ==========================================================
+// PARTIE 3A : Mapping ARKit -> GLB
+// ==========================================================
+
+// Les 52 blendshapes ARKit
+const ARKIT_BLENDSHAPES = [
+
+"browDownLeft",
+"browDownRight",
+"browInnerUp",
+"browOuterUpLeft",
+"browOuterUpRight",
+
+"cheekPuff",
+"cheekSquintLeft",
+"cheekSquintRight",
+
+"eyeBlinkLeft",
+"eyeBlinkRight",
+
+"eyeLookDownLeft",
+"eyeLookDownRight",
+
+"eyeLookInLeft",
+"eyeLookInRight",
+
+"eyeLookOutLeft",
+"eyeLookOutRight",
+
+"eyeLookUpLeft",
+"eyeLookUpRight",
+
+"eyeSquintLeft",
+"eyeSquintRight",
+
+"eyeWideLeft",
+"eyeWideRight",
+
+"jawForward",
+"jawLeft",
+"jawOpen",
+"jawRight",
+
+"mouthClose",
+
+"mouthDimpleLeft",
+"mouthDimpleRight",
+
+"mouthFrownLeft",
+"mouthFrownRight",
+
+"mouthFunnel",
+
+"mouthLeft",
+
+"mouthLowerDownLeft",
+"mouthLowerDownRight",
+
+"mouthPressLeft",
+"mouthPressRight",
+
+"mouthPucker",
+
+"mouthRight",
+
+"mouthRollLower",
+"mouthRollUpper",
+
+"mouthShrugLower",
+"mouthShrugUpper",
+
+"mouthSmileLeft",
+"mouthSmileRight",
+
+"mouthStretchLeft",
+"mouthStretchRight",
+
+"mouthUpperUpLeft",
+"mouthUpperUpRight",
+
+"noseSneerLeft",
+"noseSneerRight",
+
+"tongueOut"
+
+];
+
+// ==========================================================
+// Correspondances personnalisées
+// ==========================================================
+
+const CUSTOM_MAPPING = {
+
+};
+
+// ==========================================================
+// Fonction utilitaire
+// ==========================================================
+
+function normalizeName(name){
+
+    return name
+    .toLowerCase()
+    .replace(/[_\-\s]/g,"");
+
+}
+
+// ==========================================================
+// Création automatique du mapping
+// ==========================================================
+
+let blendshapeMapping = {};
+
+function buildBlendshapeMapping(){
+
+    blendshapeMapping = {};
+
+    faceMeshes.forEach(mesh=>{
+
+        const dict = mesh.morphTargetDictionary;
+
+        Object.keys(dict).forEach(glbName=>{
+
+            const normalizedGLB =
+            normalizeName(glbName);
+
+            ARKIT_BLENDSHAPES.forEach(arkit=>{
+
+                const normalizedARKIT =
+                normalizeName(arkit);
+
+                if(normalizedGLB === normalizedARKIT){
+
+                    blendshapeMapping[arkit] =
+                    glbName;
+
+                }
+
+            });
+
+        });
+
+    });
+
+    // Ajout des correspondances manuelles
+
+    Object.keys(CUSTOM_MAPPING).forEach(key=>{
+
+        blendshapeMapping[key] =
+        CUSTOM_MAPPING[key];
+
+    });
+
+    console.log(
+        "Mapping généré :",
+        blendshapeMapping
+    );
+
+}
+
+// ==========================================================
+// Appeler après le chargement du GLB
+// ==========================================================
+
+// buildBlendshapeMapping();
+
+
+
+
+// ==========================================================
+// PARTIE 3B : Optimisations Haute Performance
+// ==========================================================
+
+// ------------------------------
+// Configuration
+// ------------------------------
+
+const SETTINGS = {
+
+    // Intensité du lissage (0.0 -> 1.0)
+    smoothing: 0.45,
+
+    // FPS maximum de MediaPipe
+    maxTrackingFPS: 30,
+
+    // Ignorer les très petites valeurs
+    minBlendshapeValue: 0.01,
+
+    // Interpolation rotation
+    rotationSmoothing: 0.20,
+
+    // Interpolation blendshapes
+    blendshapeSmoothing: 0.45
+
+};
+
+// ------------------------------
+// Cache
+// ------------------------------
+
+const blendshapeCache = {};
+
+const previousRotation =
+new THREE.Quaternion();
+
+let lastTrackingTime = 0;
+
+// ==========================================================
+// Filtrage des BlendShapes
+// ==========================================================
+
+function filterBlendshape(name, value){
+
+    if(value < SETTINGS.minBlendshapeValue){
+
+        value = 0;
+
+    }
+
+    if(blendshapeCache[name] === undefined){
+
+        blendshapeCache[name] = value;
+
+    }
+
+    blendshapeCache[name] +=
+
+        (value - blendshapeCache[name])
+
+        *
+
+        SETTINGS.blendshapeSmoothing;
+
+    return blendshapeCache[name];
+
+}
+
+// ==========================================================
+// Rotation fluide
+// ==========================================================
+
+function smoothRotation(matrixData){
+
+    if(!avatar) return;
+
+    const matrix =
+    new THREE.Matrix4();
+
+    matrix.fromArray(matrixData);
+
+    const target =
+    new THREE.Quaternion();
+
+    target.setFromRotationMatrix(matrix);
+
+    previousRotation.slerp(
+
+        target,
+
+        SETTINGS.rotationSmoothing
+
+    );
+
+    avatar.quaternion.copy(
+
+        previousRotation
+
+    );
+
+}
+
+// ==========================================================
+// Application optimisée
+// ==========================================================
+
+function applyBlendshapesOptimized(blendshapes){
+
+    if(faceMeshes.length===0) return;
+
+    const categories =
+    blendshapes[0].categories;
+
+    faceMeshes.forEach(mesh=>{
+
+        const dict =
+        mesh.morphTargetDictionary;
+
+        const influences =
+        mesh.morphTargetInfluences;
+
+        for(let i=0;i<categories.length;i++){
+
+            const shape =
+            categories[i];
+
+            const glbName =
+            blendshapeMapping[
+                shape.categoryName
+            ];
+
+            if(!glbName) continue;
+
+            const index =
+            dict[glbName];
+
+            if(index===undefined) continue;
+
+            influences[index]=
+
+            filterBlendshape(
+
+                shape.categoryName,
+
+                shape.score
+
+            );
+
+        }
+
+    });
+
+}
+
+// ==========================================================
+// Limitation FPS Tracking
+// ==========================================================
+
+function canTrack(){
+
+    const now = performance.now();
+
+    if(
+
+        now-lastTrackingTime
+
+        <
+
+        1000/SETTINGS.maxTrackingFPS
+
+    ){
+
+        return false;
+
+    }
+
+    lastTrackingTime = now;
+
+    return true;
+
+}
+
+// ==========================================================
+// Optimisation Renderer
+// ==========================================================
+
+renderer.setAnimationLoop(()=>{
+
+    renderer.render(
+
+        scene,
+
+        camera
+
+    );
+
+});
